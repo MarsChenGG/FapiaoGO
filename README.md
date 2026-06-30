@@ -13,6 +13,8 @@
 - 前端应用：文件列表、搜索过滤、预览缩放、打印、重命名打包、Excel 导出。
 - Electron 主进程：窗口管理、IPC 通信、文件对话框、打印设置、Excel 导出、设置窗口。
 
-界面预览
+## 界面预览
 <img width="1208" height="808" alt="image" src="https://github.com/user-attachments/assets/c714439c-4a29-4006-97b0-91e95cf102e1" />
+<img width="1205" height="805" alt="image" src="https://github.com/user-attachments/assets/c7e6f2bd-ba54-4f58-b5fe-dfb80120decc" />
+
 
