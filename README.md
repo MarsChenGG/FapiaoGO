@@ -14,4 +14,5 @@
 - Electron 主进程：窗口管理、IPC 通信、文件对话框、打印设置、Excel 导出、设置窗口。
 
 界面预览
-<img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/d15312f7-0c13-4503-af08-c020e2f7448f" />
+<img width="1208" height="808" alt="image" src="https://github.com/user-attachments/assets/c714439c-4a29-4006-97b0-91e95cf102e1" />
+
