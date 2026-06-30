@@ -16,5 +16,7 @@
 ## 界面预览
 <img width="1208" height="808" alt="image" src="https://github.com/user-attachments/assets/c714439c-4a29-4006-97b0-91e95cf102e1" />
 <img width="1205" height="805" alt="image" src="https://github.com/user-attachments/assets/c7e6f2bd-ba54-4f58-b5fe-dfb80120decc" />
+<img width="1200" height="800" alt="image" src="https://github.com/user-attachments/assets/f3f396dc-caf2-4cc3-88a1-f2e5fb4f52af" />
+
 
 
