@@ -5,7 +5,7 @@
 - Electron：封装桌面应用、IPC 通信、文件对话框、打印窗口、Excel 导出、设置窗口等。
 ## 核心组件
 - 解析服务层：统一调度 PDF、OFD、图片、XML 解析，调用 OCR 补充文本，提取结构化字段，构建数据库记录。
-- OCR 引擎：基于 RapidOCR 与 ONNX Runtime，支持 GPU/CPU 执行提供者，自动方向检测与旋转，缓存加速。
+- OCR 引擎：基于 RapidOCR 与 ONNX Runtime，支持 GPU/CPU 执行提供者，缓存加速。
 - PDF 统一解析：先文本提取，不足时首页 OCR 补充，再统一字段提取。
 - 图片 OCR：支持自动方向纠正，缓存 OCR 结果，避免重复计算。
 - XML 解析：从混合文本中提取发票 XML 片段，标准化字段。
