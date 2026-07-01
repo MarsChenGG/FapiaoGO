@@ -1,0 +1,954 @@
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
+import RenameSettings from './RenameSettings'
+import AutoSaveToast, { useAutoSaveToast } from './AutoSaveToast'
+import '../settings-printer.css'
+import { PAPER_REGISTRY } from '../config'
+
+// 分隔符号选项（用于压缩包重命名）
+const ARCHIVE_SEPARATOR_OPTIONS = ['_', '-', ',', '+', '#', '·', ' ', '']
+
+// 日期格式选项（用于压缩包重命名）
+const DATE_FORMAT_OPTIONS = [
+  { value: 'none',           label: '无',             sample: '' },
+  { value: 'YYYYMMDD',       label: 'YYYYMMDD',       sample: '20250501' },
+  { value: 'YYYY年MM月DD日', label: 'YYYY年MM月DD日', sample: '2025年05月01日' },
+  { value: 'YYYY年MM月DD',   label: 'YYYY年MM月DD',   sample: '2025年05月01' },
+  { value: 'YYYY-MM-DD',     label: 'YYYY-MM-DD',     sample: '2025-05-01' },
+  { value: 'YYYY.MM.DD',     label: 'YYYY.MM.DD',     sample: '2025.05.01' },
+  { value: 'YYYY/MM/DD',     label: 'YYYY/MM/DD',     sample: '2025/05/01' },
+  { value: 'MM月DD日',       label: 'MM月DD日',       sample: '05月01日' },
+  { value: 'MM-DD',          label: 'MM-DD',          sample: '05-01' },
+  { value: 'MMDD',           label: 'MMDD',           sample: '0501' },
+  { value: 'MM/DD',          label: 'MM/DD',          sample: '05/01' },
+]
+
+export default function SettingsWindow({ settings, saveSettings, printers, electronAPI }) {
+  const [activeTab, setActiveTab] = useState('printer')
+  const contentRef = useRef(null)
+  
+  // 自动保存提示
+  const { visible: toastVisible, trigger: triggerToast, onHidden: onToastHidden } = useAutoSaveToast()
+  
+  // 包装 saveSettings 函数，保存后触发提示
+  const saveSettingsWithToast = useCallback((newSettings) => {
+    saveSettings(newSettings)
+    triggerToast()
+  }, [saveSettings, triggerToast])
+
+  // 初始化主题 - 从 localStorage 读取并应用到当前 document
+  useEffect(() => {
+    const savedTheme = localStorage.getItem('theme')
+    const isDark = savedTheme === 'dark'
+    document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+  }, [])
+
+  // 监听 localStorage 变化（如果主窗口修改了主题）
+  useEffect(() => {
+    const handleStorageChange = (e) => {
+      if (e.key === 'theme') {
+        const isDark = e.newValue === 'dark'
+        document.documentElement.setAttribute('data-theme', isDark ? 'dark' : 'light')
+      }
+    }
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
+  }, [])
+
+  // 打包设置状态（从 settings 中初始化，变更时自动保存）
+  const packSettings = settings.packSettings || {}
+  const [packTargetFolder, setPackTargetFolder] = useState(packSettings.packTargetFolder || '')
+  const [packKeepOriginal, setPackKeepOriginal] = useState(packSettings.packKeepOriginal ?? false)
+  const [packArchiveFormat, setPackArchiveFormat] = useState(packSettings.packArchiveFormat || 'ZIP')
+  const [packRenameBeforeArchive, setPackRenameBeforeArchive] = useState(packSettings.packRenameBeforeArchive ?? false)
+  const [packArchiveNamePrefix, setPackArchiveNamePrefix] = useState(packSettings.packArchiveNamePrefix ?? '发票')
+  const [packArchiveNameDateFormat, setPackArchiveNameDateFormat] = useState(packSettings.packArchiveNameDateFormat || 'YYYY年MM月DD日')
+  const [packArchiveNameSeparator, setPackArchiveNameSeparator] = useState(packSettings.packArchiveNameSeparator ?? '_')
+  const [packNameFieldOrder, setPackNameFieldOrder] = useState(packSettings.packNameFieldOrder || ['prefix', 'date'])
+
+  // 打包设置变更时自动保存到 settings
+  const updatePackSettings = useCallback((key, val) => {
+    const newPackSettings = {
+      packTargetFolder: key === 'packTargetFolder' ? val : packTargetFolder,
+      packKeepOriginal: key === 'packKeepOriginal' ? val : packKeepOriginal,
+      packArchiveFormat: key === 'packArchiveFormat' ? val : packArchiveFormat,
+      packRenameBeforeArchive: key === 'packRenameBeforeArchive' ? val : packRenameBeforeArchive,
+      packArchiveNamePrefix: key === 'packArchiveNamePrefix' ? val : packArchiveNamePrefix,
+      packArchiveNameDateFormat: key === 'packArchiveNameDateFormat' ? val : packArchiveNameDateFormat,
+      packArchiveNameSeparator: key === 'packArchiveNameSeparator' ? val : packArchiveNameSeparator,
+      packNameFieldOrder: key === 'packNameFieldOrder' ? val : packNameFieldOrder,
+    }
+    saveSettingsWithToast({ ...settings, packSettings: newPackSettings })
+  }, [settings, saveSettingsWithToast, packTargetFolder, packKeepOriginal, packArchiveFormat, packRenameBeforeArchive, packArchiveNamePrefix, packArchiveNameDateFormat, packArchiveNameSeparator, packNameFieldOrder])
+
+  // 打包设置字段变更的包装函数
+  const handlePackTargetFolderChange = (val) => { setPackTargetFolder(val); updatePackSettings('packTargetFolder', val) }
+  const handlePackKeepOriginalChange = (val) => { setPackKeepOriginal(val); updatePackSettings('packKeepOriginal', val) }
+  const handlePackArchiveFormatChange = (val) => { setPackArchiveFormat(val); updatePackSettings('packArchiveFormat', val) }
+  const handlePackRenameBeforeArchiveChange = (val) => { setPackRenameBeforeArchive(val); updatePackSettings('packRenameBeforeArchive', val) }
+  const handlePackArchiveNamePrefixChange = (val) => { setPackArchiveNamePrefix(val); updatePackSettings('packArchiveNamePrefix', val) }
+  const handlePackArchiveNameDateFormatChange = (val) => { setPackArchiveNameDateFormat(val); updatePackSettings('packArchiveNameDateFormat', val) }
+  const handlePackArchiveNameSeparatorChange = (val) => { setPackArchiveNameSeparator(val); updatePackSettings('packArchiveNameSeparator', val) }
+  const handlePackNameFieldOrderChange = (newOrder) => { setPackNameFieldOrder(newOrder); updatePackSettings('packNameFieldOrder', newOrder) }
+
+  // 根据内容调整窗口大小
+  const resizeWindow = useCallback(() => {
+    if (!contentRef.current || !electronAPI) return
+
+    // 打印机标签使用固定尺寸，打包标签使用750px宽度，重命名标签由 RenameSettings 组件自行处理
+    if (activeTab === 'printer') {
+      electronAPI.ipcRenderer.invoke('resize-settings-window', {
+        width: 750,
+        height: 750
+      }).catch(err => {
+        console.warn('[SettingsWindow] 调整窗口大小失败:', err)
+      })
+    } else if (activeTab === 'pack') {
+      electronAPI.ipcRenderer.invoke('resize-settings-window', {
+        width: 750,
+        height: 650
+      }).catch(err => {
+        console.warn('[SettingsWindow] 调整窗口大小失败:', err)
+      })
+    }
+  }, [electronAPI, activeTab])
+
+  // 当标签切换时调整窗口大小
+  useEffect(() => {
+    // 稍微延迟一下，等待内容渲染完成
+    const timer = setTimeout(() => {
+      resizeWindow()
+    }, 150)
+
+    return () => clearTimeout(timer)
+  }, [activeTab, resizeWindow])
+
+  // 打包设置 - 选择文件夹
+  const selectPackFolder = async () => {
+    try {
+      const result = await electronAPI.ipcRenderer.invoke('show-open-dialog', {
+        properties: ['openDirectory'],
+      })
+      if (result && result.filePaths && result.filePaths.length > 0) {
+        handlePackTargetFolderChange(result.filePaths[0])
+      }
+    } catch (err) {
+      console.warn('[SettingsWindow] 选择文件夹失败:', err)
+    }
+  }
+
+  // 打包设置 - 清除文件夹设置
+  const clearPackFolder = () => {
+    handlePackTargetFolderChange('')
+    handlePackKeepOriginalChange(false)
+  }
+
+  const tabs = [
+    {
+      key: 'printer', label: '打印机',
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: '14px', height: '14px' }}><polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 01-2-2v-5a2 2 0 012-2h16a2 2 0 012 2v5a2 2 0 01-2 2h-2"/><rect x="6" y="14" width="12" height="8"/></svg>,
+    },
+    {
+      key: 'rename', label: '重命名',
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: '14px', height: '14px' }}><path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>,
+    },
+    {
+      key: 'pack', label: '打包',
+      icon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" style={{ width: '14px', height: '14px' }}><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>,
+    },
+  ]
+
+  return (
+    <div style={{ display: 'flex', height: '100vh', background: 'var(--bg)', color: 'var(--text)' }}>
+      <div style={{ width: '100%', display: 'flex', flexDirection: 'column' }}>
+        <div style={{ display: 'flex', gap: 'clamp(4px, 0.4vw, 6px)', padding: 'clamp(8px, 0.75vw, 12px) clamp(8px, 0.75vw, 12px) 0' }}>
+          {tabs.map(({ key, label, icon }) => (
+            <button
+              key={key}
+              onClick={() => setActiveTab(key)}
+              style={{
+                flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                gap: 'clamp(4px, 0.4vw, 6px)', padding: 'clamp(6px, 0.65vw, 10px) 0', fontSize: 'clamp(0.7rem, 0.65rem + 0.2vw, 0.78rem)',
+                fontWeight: activeTab === key ? 600 : 400,
+                fontFamily: 'inherit', cursor: 'pointer', border: 'none',
+                borderRadius: 'var(--r-md)', transition: 'all 0.15s ease',
+                background: activeTab === key ? 'var(--surface)' : 'transparent',
+                color: activeTab === key ? 'var(--accent)' : 'var(--text-3)',
+                boxShadow: activeTab === key ? '0 1px 3px rgba(0,0,0,0.08)' : 'none',
+              }}
+            >
+              {icon}
+              {label}
+            </button>
+          ))}
+        </div>
+
+        <div ref={contentRef} style={{ flex: 1, overflow: 'hidden', padding: 'clamp(8px, 0.75vw, 12px) clamp(10px, 1vw, 16px) clamp(10px, 1vw, 16px)' }}>
+          <div style={{
+            position: 'relative',
+            minHeight: '300px',
+          }}>
+            {/* 打印机标签内容 */}
+            <div className="printer-settings" style={{
+              position: activeTab === 'printer' ? 'relative' : 'absolute',
+              opacity: activeTab === 'printer' ? 1 : 0,
+              transform: activeTab === 'printer' ? 'translateX(0) translateY(0)' : 'translateX(8px) translateY(4px)',
+              transition: 'opacity 0.25s ease, transform 0.25s ease',
+              pointerEvents: activeTab === 'printer' ? 'auto' : 'none',
+            }}>
+              {/* 打印机选择卡片 */}
+              <div className="printer-card">
+                <div className="printer-card-header">
+                  <div className="printer-card-header-icon"></div>
+                  <span className="printer-card-header-title">打印机设置</span>
+                </div>
+
+                <div className="printer-form-row">
+                  <label className="printer-form-label">打印机</label>
+                  <select
+                    className="printer-select"
+                    value={settings.printerName}
+                    onChange={(e) => saveSettingsWithToast({ ...settings, printerName: e.target.value })}
+                  >
+                    {printers.length === 0 && <option value="">未检测到打印机</option>}
+                    {printers.map((p) => (<option key={p} value={p}>{p}</option>))}
+                  </select>
+                </div>
+
+                <div className="printer-checkbox-row">
+                  <input
+                    type="checkbox"
+                    id="grayscale"
+                    className="printer-checkbox"
+                    checked={settings.grayscale}
+                    onChange={(e) => saveSettingsWithToast({ ...settings, grayscale: e.target.checked })}
+                  />
+                  <label htmlFor="grayscale" className="printer-checkbox-label">灰度打印</label>
+                </div>
+              </div>
+
+              {/* 打印份数卡片 */}
+              <div className="printer-card">
+                <div className="printer-card-header">
+                  <div className="printer-card-header-icon"></div>
+                  <span className="printer-card-header-title">打印份数</span>
+                </div>
+
+                <div className="printer-form-row">
+                  <label className="printer-form-label">份数</label>
+                  <input
+                    type="number"
+                    className="printer-input"
+                    min="1"
+                    max="99"
+                    value={settings.copies}
+                    onChange={(e) => saveSettingsWithToast({ ...settings, copies: parseInt(e.target.value) || 1 })}
+                  />
+                </div>
+
+                <div style={{ display: 'flex', gap: 'clamp(16px, 1.5vw, 24px)' }}>
+                  <div className="printer-checkbox-row">
+                    <input
+                      type="checkbox"
+                      id="collate"
+                      className="printer-checkbox"
+                      checked={settings.copies >= 2 ? settings.collate : true}
+                      disabled={settings.copies < 2}
+                      onChange={(e) => saveSettingsWithToast({ ...settings, collate: e.target.checked })}
+                    />
+                    <label
+                      htmlFor="collate"
+                      className={`printer-checkbox-label ${settings.copies < 2 ? 'disabled' : ''}`}
+                    >逐份打印</label>
+                  </div>
+
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flex: 1 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(5px, 0.5vw, 8px)' }}>
+                      <input
+                        type="checkbox"
+                        id="extraSpecial"
+                        className="printer-checkbox"
+                        checked={settings.extraSpecial}
+                        onChange={(e) => saveSettingsWithToast({ ...settings, extraSpecial: e.target.checked })}
+                      />
+                      <label htmlFor="extraSpecial" className="printer-checkbox-label">一普二专</label>
+                    </div>
+                    <span style={{
+                      fontSize: 'clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem)',
+                      color: 'var(--text-4)',
+                    }}>
+                      勾选则列表中普通发票打一份，专用发票打两份
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              {/* 纸张设置卡片 */}
+              <div className="printer-card">
+                <div className="printer-card-header">
+                  <div className="printer-card-header-icon"></div>
+                  <span className="printer-card-header-title">纸张设置</span>
+                </div>
+
+                <div className="printer-form-row">
+                  <label className="printer-form-label">纸张</label>
+                  <select
+                    className="printer-select"
+                    value={settings.paperSize}
+                    onChange={(e) => {
+                      const newSize = e.target.value
+                      // When switching away from Custom, clear customPaper
+                      const updates = { paperSize: newSize }
+                      if (newSize !== 'Custom') {
+                        delete updates.customPaper
+                      }
+                      saveSettingsWithToast({ ...settings, ...updates })
+                    }}
+                  >
+                    {PAPER_REGISTRY.map(p => (
+                      <option key={p.id} value={p.id}>{p.label}</option>
+                    ))}
+                  </select>
+
+                  {/* 自定义尺寸输入 */}
+                  {settings.paperSize === 'Custom' && (
+                    <div style={{ display: 'flex', gap: 'clamp(5px, 0.5vw, 8px)', marginTop: 'clamp(5px, 0.5vw, 8px)', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <label className="printer-form-label" style={{ fontSize: 'clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem)', marginBottom: '2px' }}>宽度 (mm)</label>
+                        <input
+                          type="number"
+                          className="printer-input"
+                          min={50}
+                          max={1000}
+                          step={0.5}
+                          placeholder="50-1000"
+                          value={settings.customPaper?.widthMM ?? ''}
+                          onChange={(e) => {
+                            const w = parseFloat(e.target.value)
+                            saveSettingsWithToast({
+                              ...settings,
+                              customPaper: { ...settings.customPaper, widthMM: isNaN(w) ? undefined : w }
+                            })
+                          }}
+                        />
+                      </div>
+                      <span style={{ marginTop: 'clamp(10px, 1vw, 16px)', color: '#6b7280' }}>×</span>
+                      <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
+                        <label className="printer-form-label" style={{ fontSize: 'clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem)', marginBottom: '2px' }}>高度 (mm)</label>
+                        <input
+                          type="number"
+                          className="printer-input"
+                          min={50}
+                          max={1000}
+                          step={0.5}
+                          placeholder="50-1000"
+                          value={settings.customPaper?.heightMM ?? ''}
+                          onChange={(e) => {
+                            const h = parseFloat(e.target.value)
+                            saveSettingsWithToast({
+                              ...settings,
+                              customPaper: { ...settings.customPaper, heightMM: isNaN(h) ? undefined : h }
+                            })
+                          }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 合并发票设置 */}
+                <div className="printer-form-row" style={{ marginTop: 'clamp(8px, 0.75vw, 12px)' }}>
+                  <label className="printer-form-label">合并</label>
+                  <select
+                    className="printer-merge-select"
+                    value={settings.mergeMode || 'none'}
+                    onChange={(e) => saveSettingsWithToast({ ...settings, mergeMode: e.target.value })}
+                  >
+                    <option value="none">不合并</option>
+                    <option value="merge2">两票一页（1页纸2张发票）</option>
+                    <option value="merge3">三票一页（1页纸3张发票）</option>
+                    <option value="merge4">四票一页（1页纸4张发票）</option>
+                  </select>
+                </div>
+
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginTop: 'clamp(5px, 0.5vw, 8px)' }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(5px, 0.5vw, 8px)' }}>
+                    <input
+                      type="checkbox"
+                      id="autoOrient"
+                      className="printer-checkbox"
+                      checked={settings.autoOrient ?? false}
+                      onChange={(e) => saveSettingsWithToast({ ...settings, autoOrient: e.target.checked })}
+                    />
+                    <label htmlFor="autoOrient" className="printer-checkbox-label">
+                      自动回正
+                    </label>
+                  </div>
+                  <span style={{
+                    fontSize: 'clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem)',
+                    color: 'var(--text-4)',
+                  }}>
+                    自动检测文字方向并旋转至正确方向（不稳定，解析慢）
+                  </span>
+                </div>
+              </div>
+
+            </div>
+            {/* 重命名标签内容 */}
+            <div style={{
+              position: activeTab === 'rename' ? 'relative' : 'absolute',
+              opacity: activeTab === 'rename' ? 1 : 0,
+              transform: activeTab === 'rename' ? 'translateX(0) translateY(0)' : 'translateX(8px) translateY(4px)',
+              transition: 'opacity 0.25s ease, transform 0.25s ease',
+              pointerEvents: activeTab === 'rename' ? 'auto' : 'none',
+              width: '100%',
+            }}>
+              <RenameSettings
+                renameSettings={settings.renameSettings || {}}
+                onSave={(renameSettings) => saveSettingsWithToast({ ...settings, renameSettings })}
+                electronAPI={electronAPI}
+                active={activeTab === 'rename'}
+              />
+            </div>
+
+            {/* ========== 打包设置 ========== */}
+            <div style={{
+              position: activeTab === 'pack' ? 'relative' : 'absolute',
+              opacity: activeTab === 'pack' ? 1 : 0,
+              transform: activeTab === 'pack' ? 'translateX(0) translateY(0)' : 'translateX(8px) translateY(4px)',
+              transition: 'opacity 0.25s ease, transform 0.25s ease',
+              pointerEvents: activeTab === 'pack' ? 'auto' : 'none',
+              width: '100%',
+            }}>
+              <div style={{
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 'clamp(8px, 0.75vw, 12px)',
+              }}>
+                {/* 打包规则标题 */}
+                <div style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'space-between',
+                }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(5px, 0.5vw, 8px)' }}>
+                    <div style={{
+                      width: '4px',
+                      height: '16px',
+                      background: 'var(--accent)',
+                      borderRadius: '2px',
+                    }}></div>
+                    <span style={{
+                      fontSize: 'clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem)',
+                      fontWeight: 600,
+                      color: 'var(--text)',
+                      letterSpacing: '0.02em',
+                    }}>
+                      打包规则
+                    </span>
+                  </div>
+                </div>
+
+                {/* 打包规则卡片 */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'clamp(8px, 0.75vw, 12px)',
+                  background: 'var(--surface)',
+                  borderRadius: 'var(--r-lg)',
+                  boxShadow: 'var(--shadow-sm)',
+                  padding: 'clamp(8px, 0.75vw, 12px) clamp(10px, 1vw, 16px)',
+                }}>
+                  {/* 打包前先进行发票重命名 */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <label style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'clamp(5px, 0.5vw, 8px)',
+                      cursor: 'pointer',
+                    }}>
+                      <input
+                        type="checkbox"
+                        checked={packRenameBeforeArchive}
+                        onChange={(e) => handlePackRenameBeforeArchiveChange(e.target.checked)}
+                        style={{
+                          width: '14px',
+                          height: '14px',
+                          accentColor: 'var(--accent)',
+                          cursor: 'pointer',
+                        }}
+                      />
+                      <span style={{
+                        fontSize: 'clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem)',
+                        color: 'var(--text)',
+                      }}>
+                        打包前先进行发票重命名
+                      </span>
+                    </label>
+                    <span style={{
+                      fontSize: 'clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem)',
+                      color: 'var(--text-4)',
+                    }}>
+                      勾选则按重命名规则对发票进行重命名再打包
+                    </span>
+                  </div>
+
+                  {/* 压缩包格式选择 */}
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    paddingTop: '16px',
+                  }}>
+                    <span style={{
+                      fontSize: 'clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem)',
+                      color: 'var(--text)',
+                    }}>
+                      压缩包格式
+                    </span>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 'clamp(5px, 0.5vw, 8px)',
+                    }}>
+                      {['ZIP', 'RAR', '7Z'].map((format) => (
+                        <button
+                          key={format}
+                          onClick={() => handlePackArchiveFormatChange(format)}
+                          style={{
+                            padding: 'clamp(4px, 0.4vw, 6px) clamp(10px, 1vw, 16px)',
+                            fontSize: 'clamp(0.7rem, 0.65rem + 0.2vw, 0.78rem)',
+                            fontWeight: 500,
+                            borderRadius: 'var(--r-md)',
+                            border: '1px solid var(--border-light)',
+                            background: packArchiveFormat === format ? 'var(--accent)' : 'var(--bg)',
+                            color: packArchiveFormat === format ? 'white' : 'var(--text-3)',
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                            transition: 'all 0.2s ease',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (packArchiveFormat !== format) {
+                              e.currentTarget.style.borderColor = 'var(--accent)'
+                              e.currentTarget.style.color = 'var(--accent)'
+                            }
+                          }}
+                          onMouseLeave={(e) => {
+                            if (packArchiveFormat !== format) {
+                              e.currentTarget.style.borderColor = 'var(--border-light)'
+                              e.currentTarget.style.color = 'var(--text-3)'
+                            }
+                          }}
+                        >
+                          {format}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* 压缩包重命名规则 */}
+                  <div style={{
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 'clamp(6px, 0.65vw, 10px)',
+                    paddingTop: '16px',
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'space-between',
+                    }}>
+                      <span style={{
+                        fontSize: 'clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem)',
+                        color: 'var(--text)',
+                        fontWeight: 500,
+                      }}>
+                        压缩包命名规则
+                      </span>
+                    </div>
+                    {/* 可拖拽的字段区域 */}
+                    <div
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                        gap: 'clamp(8px, 0.75vw, 12px)',
+                        padding: 'clamp(8px, 0.75vw, 12px)',
+                        background: 'var(--bg)',
+                        borderRadius: 'var(--r-md)',
+                        border: '1px dashed var(--border-light)',
+                      }}
+                      onDragOver={(e) => e.preventDefault()}
+                    >
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(5px, 0.5vw, 8px)' }}>
+                      {packNameFieldOrder.map((fieldType, index) => (
+                        <div key={fieldType} style={{ display: 'flex', alignItems: 'center', gap: 'clamp(5px, 0.5vw, 8px)' }}>
+                          {/* 字段 */}
+                          <div
+                            draggable
+                            onDragStart={(e) => {
+                              e.dataTransfer.setData('text/plain', fieldType)
+                              e.dataTransfer.effectAllowed = 'move'
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault()
+                              const draggedType = e.dataTransfer.getData('text/plain')
+                              if (draggedType !== fieldType) {
+                                const newOrder = [...packNameFieldOrder]
+                                const draggedIndex = newOrder.indexOf(draggedType)
+                                const targetIndex = newOrder.indexOf(fieldType)
+                                newOrder.splice(draggedIndex, 1)
+                                newOrder.splice(targetIndex, 0, draggedType)
+                                handlePackNameFieldOrderChange(newOrder)
+                              }
+                            }}
+                            onDragOver={(e) => e.preventDefault()}
+                            style={{
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 'clamp(4px, 0.4vw, 6px)',
+                              padding: 'clamp(4px, 0.4vw, 6px) clamp(8px, 0.75vw, 12px)',
+                              background: 'var(--surface)',
+                              borderRadius: 'var(--r-md)',
+                              border: '1px solid var(--border-light)',
+                              cursor: 'grab',
+                              fontSize: 'clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem)',
+                              color: 'var(--text)',
+                            }}
+                          >
+                            <span style={{ color: 'var(--text-4)', fontSize: 'clamp(0.7rem, 0.65rem + 0.2vw, 0.78rem)' }}>&#9776;</span>
+                            {fieldType === 'prefix' ? (
+                              <input
+                                type="text"
+                                value={packArchiveNamePrefix}
+                                onChange={(e) => handlePackArchiveNamePrefixChange(e.target.value)}
+                                placeholder="自定义内容"
+                                style={{
+                                  width: 'clamp(100px, 12vw, 160px)',
+                                  padding: 'clamp(2px, 0.25vw, 4px) clamp(5px, 0.5vw, 8px)',
+                                  fontSize: 'clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem)',
+                                  borderRadius: 'var(--r-sm)',
+                                  border: '1px solid var(--border-light)',
+                                  background: 'var(--bg)',
+                                  color: 'var(--text)',
+                                  outline: 'none',
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              />
+                            ) : (
+                              <select
+                                value={packArchiveNameDateFormat}
+                                onChange={(e) => handlePackArchiveNameDateFormatChange(e.target.value)}
+                                style={{
+                                  width: 'clamp(100px, 12vw, 160px)',
+                                  padding: 'clamp(2px, 0.25vw, 4px) clamp(5px, 0.5vw, 8px)',
+                                  fontSize: 'clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem)',
+                                  borderRadius: 'var(--r-sm)',
+                                  border: '1px solid var(--border-light)',
+                                  background: 'var(--bg)',
+                                  color: 'var(--text)',
+                                  outline: 'none',
+                                  cursor: 'pointer',
+                                }}
+                                onClick={(e) => e.stopPropagation()}
+                              >
+                                {DATE_FORMAT_OPTIONS.map(opt => (
+                                  <option key={opt.value} value={opt.value}>{opt.label}</option>
+                                ))}
+                              </select>
+                            )}
+                          </div>
+                          {/* 分隔符（在两个字段之间显示，且两个字段都有值时才显示） */}
+                          {index < packNameFieldOrder.length - 1 && (() => {
+                            // 检查是否两个字段都有值
+                            const hasPrefix = packArchiveNamePrefix && packArchiveNamePrefix.trim() !== ''
+                            const hasDate = packArchiveNameDateFormat !== 'none'
+                            const hasBothFields = hasPrefix && hasDate
+                            return hasBothFields
+                          })() && (
+                            <select
+                              value={packArchiveNameSeparator}
+                              onChange={(e) => handlePackArchiveNameSeparatorChange(e.target.value)}
+                              style={{
+                                padding: 'clamp(2px, 0.25vw, 4px) clamp(5px, 0.5vw, 8px)',
+                                fontSize: 'clamp(0.7rem, 0.65rem + 0.2vw, 0.78rem)',
+                                borderRadius: 'var(--r-sm)',
+                                border: '1px solid var(--border-light)',
+                                background: 'var(--surface)',
+                                color: 'var(--text-2)',
+                                outline: 'none',
+                                cursor: 'pointer',
+                              }}
+                            >
+                              {ARCHIVE_SEPARATOR_OPTIONS.map(ch => (
+                                <option key={ch} value={ch}>
+                                  {ch === ' ' ? '空格' : ch === '' ? '无' : ch}
+                                </option>
+                              ))}
+                            </select>
+                          )}
+                        </div>
+                      ))}
+                      </div>
+                      <span style={{
+                        fontSize: 'clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem)',
+                        color: 'var(--text-4)',
+                        whiteSpace: 'nowrap',
+                      }}>
+                        可拖动拖拽手柄 <span style={{ fontFamily: 'monospace' }}>&#9776;</span> 调整字段排序
+                      </span>
+                    </div>
+                    {/* 压缩包名称预览 */}
+                    <div style={{
+                      padding: 'clamp(6px, 0.65vw, 10px) clamp(8px, 0.75vw, 12px)',
+                      background: 'var(--bg)',
+                      borderRadius: 'var(--r-md)',
+                      border: '1px solid var(--border-light)',
+                      fontSize: 'clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem)',
+                      color: 'var(--accent)',
+                      fontFamily: 'monospace',
+                    }}>
+                      {(() => {
+                        const dateMap = {
+                          'YYYYMMDD': '20250501',
+                          'YYYY年MM月DD日': '2025年05月01日',
+                          'YYYY年MM月DD': '2025年05月01',
+                          'YYYY-MM-DD': '2025-05-01',
+                          'YYYY.MM.DD': '2025.05.01',
+                          'YYYY/MM/DD': '2025/05/01',
+                          'MM月DD日': '05月01日',
+                          'MM-DD': '05-01',
+                          'MMDD': '0501',
+                          'MM/DD': '05/01',
+                        }
+                        const dateStr = packArchiveNameDateFormat === 'none' ? '' : (dateMap[packArchiveNameDateFormat] || '')
+                        const prefix = packArchiveNamePrefix || ''
+                        // 根据字段顺序生成预览，过滤掉空值
+                        const parts = packNameFieldOrder.map(type =>
+                          type === 'prefix' ? prefix : dateStr
+                        ).filter(Boolean)
+                        // 只有一个字段时不使用分隔符
+                        const sep = parts.length > 1 ? packArchiveNameSeparator : ''
+                        return `${parts.join(sep)}.${packArchiveFormat.toLowerCase()}`
+                      })()}
+                    </div>
+
+                    {/* 保留原件 */}
+                    <div style={{
+                      paddingTop: '16px',
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        justifyContent: 'space-between',
+                      }}>
+                        <label style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'clamp(5px, 0.5vw, 8px)',
+                          cursor: 'pointer',
+                        }}>
+                          <input
+                            type="checkbox"
+                            checked={packKeepOriginal}
+                            onChange={(e) => handlePackKeepOriginalChange(e.target.checked)}
+                            style={{
+                              width: '14px',
+                              height: '14px',
+                              accentColor: 'var(--accent)',
+                              cursor: 'pointer',
+                            }}
+                          />
+                          <span style={{
+                            fontSize: 'clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem)',
+                            color: 'var(--text)',
+                          }}>
+                            保留原件
+                          </span>
+                        </label>
+                        <span style={{
+                          fontSize: 'clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem)',
+                          color: 'var(--text-4)',
+                        }}>
+                          勾选则复制原文件到压缩包；不勾选则剪切原文件到压缩包
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 目标文件夹 */}
+                <div style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  gap: 'clamp(8px, 0.75vw, 12px)',
+                }}>
+                  <div style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                  }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 'clamp(5px, 0.5vw, 8px)' }}>
+                      <div style={{
+                        width: '4px',
+                        height: '16px',
+                        background: 'var(--accent)',
+                        borderRadius: '2px',
+                      }}></div>
+                      <span style={{
+                        fontSize: 'clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem)',
+                        fontWeight: 600,
+                        color: 'var(--text)',
+                        letterSpacing: '0.02em',
+                      }}>
+                        目标文件夹
+                      </span>
+                    </div>
+                    <span style={{
+                      fontSize: 'clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem)',
+                      color: 'var(--text-4)',
+                      fontStyle: 'italic',
+                    }}>
+                      可选设置
+                    </span>
+                  </div>
+
+                  <div style={{
+                    background: 'var(--surface)',
+                    borderRadius: 'var(--r-lg)',
+                    boxShadow: 'var(--shadow-sm)',
+                    padding: 'clamp(10px, 1vw, 16px)',
+                  }}>
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: 'clamp(8px, 0.75vw, 12px)',
+                    }}>
+                      <div style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 'clamp(8px, 0.75vw, 12px)',
+                      }}>
+                        <div style={{
+                          flex: 1,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          gap: 'clamp(2px, 0.25vw, 4px)',
+                          minWidth: 0,
+                        }}>
+                          <div style={{
+                            padding: 'clamp(6px, 0.65vw, 10px) clamp(8px, 0.75vw, 12px)',
+                            background: 'var(--bg)',
+                            borderRadius: 'var(--r-md)',
+                            border: '1px solid var(--border-light)',
+                            fontSize: 'clamp(0.7rem, 0.65rem + 0.2vw, 0.78rem)',
+                            color: packTargetFolder ? 'var(--text)' : 'var(--text-4)',
+                            fontStyle: packTargetFolder ? 'normal' : 'italic',
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            minHeight: '40px',
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}>
+                            {packTargetFolder || '未设置 — 打包时弹出选择文件夹对话框'}
+                          </div>
+                          {packTargetFolder && (
+                            <button
+                              onClick={clearPackFolder}
+                              style={{
+                                alignSelf: 'flex-start',
+                                fontSize: 'clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem)',
+                                color: 'var(--text-4)',
+                                background: 'none',
+                                border: 'none',
+                                cursor: 'pointer',
+                                padding: '2px 0',
+                                textDecoration: 'underline',
+                                textUnderlineOffset: '2px',
+                                transition: 'color 0.2s ease',
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.color = 'var(--text-3)'}
+                              onMouseLeave={(e) => e.currentTarget.style.color = 'var(--text-4)'}
+                            >
+                              清除设置，恢复弹框选择
+                            </button>
+                          )}
+                        </div>
+
+                        <button
+                          onClick={selectPackFolder}
+                          style={{
+                            padding: 'clamp(6px, 0.65vw, 10px) clamp(12px, 1.25vw, 20px)',
+                            fontSize: 'clamp(0.7rem, 0.65rem + 0.2vw, 0.78rem)',
+                            fontWeight: 500,
+                            borderRadius: 'var(--r-md)',
+                            border: '1px solid var(--accent)',
+                            background: 'var(--accent)',
+                            color: 'white',
+                            cursor: 'pointer',
+                            fontFamily: 'inherit',
+                            whiteSpace: 'nowrap',
+                            transition: 'all 0.2s ease',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: 'clamp(4px, 0.4vw, 6px)',
+                            minWidth: 'clamp(100px, 12vw, 160px)',
+                            justifyContent: 'center',
+                          }}
+                          onMouseEnter={(e) => {
+                            e.currentTarget.style.background = 'var(--accent-dark)'
+                            e.currentTarget.style.transform = 'translateY(-1px)'
+                            e.currentTarget.style.boxShadow = '0 2px 8px rgba(59, 108, 245, 0.3)'
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.background = 'var(--accent)'
+                            e.currentTarget.style.transform = 'translateY(0)'
+                            e.currentTarget.style.boxShadow = 'none'
+                          }}
+                        >
+                          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <path d="M3 15v4c0 1.1.9 2 2 2h14a2 2 0 0 0 2-2v-4"></path>
+                            <polyline points="8 10 12 14 16 10"></polyline>
+                            <line x1="12" y1="14" x2="12" y2="2"></line>
+                          </svg>
+                          选择文件夹
+                        </button>
+                      </div>
+
+                      <div style={{
+                        fontSize: 'clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem)',
+                        color: 'var(--text-4)',
+                        lineHeight: 1.5,
+                        paddingTop: '20px',
+                        marginTop: 'clamp(2px, 0.25vw, 4px)',
+                      }}>
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 'clamp(4px, 0.4vw, 6px)' }}>
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <line x1="12" y1="16" x2="12" y2="12"></line>
+                            <line x1="12" y1="8" x2="12.01" y2="8"></line>
+                          </svg>
+                          <span>
+                            设置后打包将直接输出到此文件夹；不设置则弹出选择文件夹对话框。
+                          </span>
+                        </div>
+                      </div>
+
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      {/* 自动保存提示 */}
+      <AutoSaveToast visible={toastVisible} onHidden={onToastHidden} />
+    </div>
+  )
+}

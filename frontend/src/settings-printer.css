@@ -1,0 +1,264 @@
+@reference "tailwindcss";
+
+/* ================================================================
+   settings-printer.css ?打印机设置标签页样式
+   ================================================================ */
+
+/* ══════════════════════════════════════
+   打印机设置容?
+   ══════════════════════════════════════ */
+.printer-settings {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 0.75vw, 12px);
+}
+
+/* -- 设置卡片 -- */
+.printer-card {
+  background: var(--surface);
+  @apply rounded-lg;
+  border: 1px solid var(--border-light);
+  padding: clamp(8px, 0.75vw, 12px) clamp(10px, 1vw, 16px);
+  display: flex;
+  flex-direction: column;
+  gap: clamp(8px, 0.75vw, 12px);
+}
+
+.printer-card-header {
+  display: flex;
+  align-items: center;
+  gap: clamp(5px, 0.5vw, 8px);
+  margin-bottom: clamp(2px, 0.25vw, 4px);
+}
+
+.printer-card-header-icon {
+  width: 4px;
+  height: clamp(10px, 1vw, 16px);
+  background: var(--accent);
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.printer-card-header-title {
+  font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem);
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: 0.02em;
+}
+
+/* -- 表单?-- */
+.printer-form-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(8px, 0.75vw, 12px);
+}
+
+.printer-form-label {
+  font-size: clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem);
+  color: var(--text-3);
+  min-width: 60px;
+  flex-shrink: 0;
+}
+
+.printer-form-control {
+  flex: 1;
+}
+
+/* -- 下拉选择 -- */
+.printer-select {
+  width: 100%;
+  @apply rounded-md;
+  padding: clamp(5px, 0.5vw, 8px) clamp(8px, 0.75vw, 12px);
+  font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem);
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.printer-select:hover {
+  border-color: var(--accent);
+}
+
+.printer-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* -- 输入?-- */
+.printer-input {
+  width: 100%;
+  @apply rounded-md;
+  padding: clamp(5px, 0.5vw, 8px) clamp(8px, 0.75vw, 12px);
+  font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem);
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+}
+
+.printer-input:hover {
+  border-color: var(--accent);
+}
+
+.printer-input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.printer-input::-webkit-inner-spin-button,
+.printer-input::-webkit-outer-spin-button {
+  opacity: 1;
+}
+
+/* -- 复选框 -- */
+.printer-checkbox-row {
+  display: flex;
+  align-items: center;
+  gap: clamp(5px, 0.5vw, 8px);
+}
+
+.printer-checkbox {
+  width: clamp(10px, 1vw, 16px);
+  height: clamp(10px, 1vw, 16px);
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+.printer-checkbox-label {
+  font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem);
+  color: var(--text);
+  cursor: pointer;
+  user-select: none;
+}
+
+.printer-checkbox-label:hover {
+  color: var(--accent);
+}
+
+/* -- 禁用状?-- */
+.printer-checkbox:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.printer-checkbox-label.disabled {
+  color: var(--text-4);
+  cursor: not-allowed;
+}
+
+/* -- 帮助图标 -- */
+.printer-help-icon {
+  cursor: help;
+  color: var(--text-3);
+  font-size: clamp(0.7rem, 0.65rem + 0.2vw, 0.78rem);
+  transition: color 0.15s ease;
+}
+
+.printer-help-icon:hover {
+  color: var(--accent);
+}
+
+/* -- 方向选择按钮?-- */
+.printer-orientation-group {
+  display: flex;
+  gap: clamp(5px, 0.5vw, 8px);
+}
+
+.printer-orientation-btn {
+  flex: 1;
+  padding: clamp(5px, 0.5vw, 8px);
+  @apply rounded-md;
+  font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(4px, 0.4vw, 6px);
+  cursor: pointer;
+  font-family: inherit;
+  transition: all 0.15s ease;
+  background: var(--surface);
+  border: 1px solid var(--border-light);
+  color: var(--text-3);
+}
+
+.printer-orientation-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.printer-orientation-btn.active {
+  background: var(--accent-soft);
+  border-color: rgba(59, 108, 245, 0.2);
+  color: var(--accent);
+}
+
+.printer-orientation-btn svg {
+  width: clamp(10px, 1vw, 16px);
+  height: clamp(10px, 1vw, 16px);
+}
+
+/* -- 合并发票下拉 -- */
+.printer-merge-select {
+  width: 100%;
+  @apply rounded-md;
+  padding: clamp(5px, 0.5vw, 8px) clamp(8px, 0.75vw, 12px);
+  font-size: clamp(0.75rem, 0.7rem + 0.25vw, 0.85rem);
+  background: var(--bg);
+  border: 1px solid var(--border-light);
+  color: var(--text);
+  font-family: inherit;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  outline: none;
+  cursor: pointer;
+  appearance: auto;
+}
+
+.printer-merge-select:hover {
+  border-color: var(--accent);
+}
+
+.printer-merge-select:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+/* -- 提示文字 -- */
+.printer-hint {
+  font-size: clamp(0.625rem, 0.6rem + 0.15vw, 0.7rem);
+  color: var(--text-4);
+  margin-top: clamp(2px, 0.25vw, 4px);
+}
+
+/* ══════════════════════════════════════
+   深色模式
+   ══════════════════════════════════════ */
+[data-theme="dark"] .printer-select,
+[data-theme="dark"] .printer-input,
+[data-theme="dark"] .printer-merge-select {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .printer-select:hover,
+[data-theme="dark"] .printer-input:hover,
+[data-theme="dark"] .printer-merge-select:hover {
+  border-color: var(--accent);
+}
+
+[data-theme="dark"] .printer-orientation-btn {
+  background: var(--surface-hover);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .printer-orientation-btn.active {
+  background: var(--accent-soft);
+  border-color: rgba(91, 141, 239, 0.3);
+}
