@@ -6,6 +6,7 @@
 ## 核心组件
 - 解析服务层：统一调度 PDF、OFD、图片，调用 OCR 补充文本，提取结构化字段，构建数据库记录。
 - OCR 引擎：基于 RapidOCR 与 ONNX Runtime，支持 GPU/CPU 执行提供者，缓存加速。
+- OCR模型：PP-OCRv6_det_small、PP-OCRv6_rec_small
 - PDF 统一解析：先文本提取，不足时首页 OCR 补充，再统一字段提取。
 - 图片 OCR：支持自动方向纠正，缓存 OCR 结果，避免重复计算。
 - XML 解析：从混合文本中提取发票 XML 片段，标准化字段。
